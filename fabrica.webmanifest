@@ -1,0 +1,12 @@
+{
+  "name": "Pedido Fábrica Central",
+  "short_name": "Fábrica",
+  "start_url": "fabrica.html",
+  "display": "standalone",
+  "background_color": "#FFC400",
+  "theme_color": "#FFC400",
+  "icons": [
+    { "src": "fabrica-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "fabrica-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
