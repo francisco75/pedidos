@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedido Central — Fábrica</title>
+<style>
+  :root{--azul:#0a58a3;--gris:#6e6e73}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:12px 12px 120px;background:#f5f5f7;color:#1c1c1e}
+  .card{background:#fff;border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  h1{font-size:1.05rem;margin:0}
+  .sub{color:var(--gris);font-size:.82rem;margin-top:2px}
+  h2{font-size:.92rem;margin:0 0 6px;color:var(--azul)}
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th{padding:4px 2px;border-bottom:2px solid var(--azul);font-size:.72rem;color:#555;text-align:right}
+  th:first-child{text-align:left}
+  td{padding:4px 2px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}
+  td:first-child{text-align:left;white-space:normal;max-width:34vw}
+  .qty{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+  .qty button{width:34px;height:34px;border:none;border-radius:8px;background:#e8eef7;color:var(--azul);font-size:1.2rem;font-weight:700}
+  .qty button:active{background:#c9d9ef}
+  .qty input{width:58px;height:34px;text-align:center;border:1px solid #ccc;border-radius:8px;font-size:.95rem;font-weight:700;color:var(--azul)}
+  .tot td{background:#eef4fb;font-weight:700}
+  .gran td{background:#dcebfb;font-weight:800;font-size:.92rem}
+  textarea{width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-family:inherit;font-size:.9rem;min-height:56px}
+  input[type=text],input[type=password]{width:100%;border:1px solid #ccc;border-radius:8px;padding:10px;font-size:.9rem}
+  .barra{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:10px 14px;box-shadow:0 -2px 8px rgba(0,0,0,.12);display:flex;gap:8px;align-items:center}
+  .barra .resumen{font-size:.78rem;color:var(--gris);flex:1;line-height:1.2}
+  button.acc{border:none;border-radius:10px;padding:12px 14px;font-size:.92rem;font-weight:700;color:#fff}
+  .b-azul{background:var(--azul)} .b-azul:active{background:#08427a}
+  .b-verde{background:#1a9e46} .b-verde:active{background:#127a34}
+  .b-ambar{background:#c77700} .b-ambar:active{background:#9a5c00}
+  .b-full{width:100%;margin-top:8px}
+  .aviso{background:#fff8e1;border-radius:10px;padding:8px 12px;font-size:.8rem;color:#7a5c00;margin-top:8px}
+  .estado{background:#e8f0fb;border-radius:10px;padding:10px 12px;font-size:.85rem;color:#08427a;margin-top:8px;white-space:pre-line}
+  .error{background:#fdecea;color:#8a1f11}
+  .ok{background:#e6f6ea;color:#0f5f2c}
+  img.shot{width:100%;border-radius:10px;border:1px solid #ddd;margin-top:8px}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid #9bc;border-top-color:transparent;border-radius:50%;animation:g .8s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes g{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>🏭 Pedido a fábrica — Central</h1>
+  <div class="sub" id="cabecera">Sin propuesta cargada</div>
+  <div id="panelToken" style="display:none">
+    <div class="aviso">Pegá tu token de GitHub (se guarda solo en este teléfono).</div>
+    <input type="password" id="token" placeholder="github_pat_...">
+    <button class="acc b-azul b-full" onclick="guardarToken()">Guardar token</button>
+  </div>
+  <div id="acciones" style="display:none">
+    <button class="acc b-azul b-full" id="btnGenerar" onclick="generar()">🔄 Generar pedido nuevo (ventas + stock + propuesta)</button>
+    <button class="acc b-azul b-full" style="background:#5a6b7d" onclick="cargarPropuesta(true)">📥 Traer última propuesta</button>
+  </div>
+  <div id="estado" class="estado" style="display:none"></div>
+</div>
+
+<div id="secciones"></div>
+
+<div class="card" id="cardObs" style="display:none">
+  <h2>Observaciones</h2>
+  <textarea id="obs" placeholder="Ej: reposición de tapas de empanadas"></textarea>
+</div>
+
+<div class="card" id="cardResultado" style="display:none">
+  <h2>Resultado de la carga</h2>
+  <div id="resultadoTexto" class="estado"></div>
+  <img id="shotResumen" class="shot" style="display:none">
+</div>
+
+<div class="barra" id="barra" style="display:none">
+  <div class="resumen" id="resumen"></div>
+  <button class="acc b-ambar" onclick="cargar('prueba')">🧪 Probar</button>
+  <button class="acc b-verde" onclick="cargar('confirmar')">✅ Autorizar</button>
+</div>
+
+<script>
+// ══ CONFIG ══
+const OWNER='francisco75', REPO='pedidos-central', BRANCH='master';
+const WF_GENERAR='generar-propuesta.yml', WF_CARGAR='cargar-pedido.yml';
+const PROPUESTA='propuesta_central.json';
+const RESULTADO='resultados/resultado_carga.json', SHOT='resultados/resumen.png';
+const API=`https://api.github.com/repos/${OWNER}/${REPO}`;
+
+let PEDIDO=null, ocupado=false;
+const $=id=>document.getElementById(id);
+const token=()=>localStorage.getItem('gh_token')||'';
+
+function guardarToken(){
+  const t=$('token').value.trim();
+  if(!t) return alert('Pegá el token');
+  localStorage.setItem('gh_token', t);
+  init();
+}
+
+async function gh(path, opts={}){
+  const r=await fetch(API+path, {...opts, headers:{
+    'Authorization':'Bearer '+token(),
+    'Accept':'application/vnd.github+json',
+    'X-GitHub-Api-Version':'2022-11-28',
+    ...(opts.headers||{})}});
+  if(r.status===401||r.status===403) throw new Error('Token inválido o vencido (401/403)');
+  return r;
+}
+
+async function fileMeta(path){
+  const r=await gh(`/contents/${path}?ref=${BRANCH}&t=${Date.now()}`, {cache:'no-store'});
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error('Error leyendo '+path+': '+r.status);
+  return r.json();   // {sha, content(base64), ...}
+}
+
+const b64=s=>decodeURIComponent(escape(atob(s.replace(/\n/g,''))));
+
+function estado(msg, cls=''){
+  const e=$('estado'); e.style.display='block';
+  e.className='estado '+cls;
+  e.innerHTML=msg;
+}
+
+async function dispatch(wf, inputs){
+  const r=await gh(`/actions/workflows/${wf}/dispatches`,
+    {method:'POST', body:JSON.stringify({ref:BRANCH, inputs})});
+  if(r.status!==204){
+    const t=await r.text();
+    throw new Error(`No pude lanzar ${wf} (${r.status}): ${t.slice(0,200)}`);
+  }
+}
+
+// Espera a que el sha de `path` cambie respecto de shaAntes (o exista si era null)
+async function esperarCambio(path, shaAntes, maxMin, label){
+  const fin=Date.now()+maxMin*60000; let i=0;
+  while(Date.now()<fin){
+    await new Promise(r=>setTimeout(r,20000)); i++;
+    estado(`<span class="spinner"></span>${label} — esperando resultado (${Math.round(i*20/60*10)/10} min)...`);
+    try{
+      const m=await fileMeta(path);
+      if(m && m.sha!==shaAntes) return m;
+    }catch(e){/* reintento */}
+  }
+  throw new Error(`Timeout: ${label} no terminó en ${maxMin} min. Mirá la pestaña Actions del repo.`);
+}
+
+// ── Generar propuesta ──
+async function generar(){
+  if(ocupado) return;
+  ocupado=true; $('btnGenerar').disabled=true;
+  try{
+    const antes=await fileMeta(PROPUESTA);
+    estado('<span class="spinner"></span>Lanzando generación en la nube...');
+    await dispatch(WF_GENERAR, {});
+    const m=await esperarCambio(PROPUESTA, antes?antes.sha:null, 15, 'Generando propuesta');
+    PEDIDO=JSON.parse(b64(m.content));
+    render();
+    estado('Propuesta nueva lista ✅','ok');
+  }catch(e){ estado('❌ '+e.message,'error'); }
+  ocupado=false; $('btnGenerar').disabled=false;
+}
+
+async function cargarPropuesta(avisar){
+  try{
+    const m=await fileMeta(PROPUESTA);
+    if(!m){ if(avisar) estado('Todavía no hay propuesta en el repo. Tocá "Generar".','error'); return; }
+    PEDIDO=JSON.parse(b64(m.content));
+    render();
+    if(avisar) estado(`Propuesta del ${PEDIDO.fecha} cargada. Si es vieja, tocá "Generar".`,'ok');
+  }catch(e){ estado('❌ '+e.message,'error'); }
+}
+
+// ── Render de la propuesta (misma lógica que pedido_app.html) ──
+function render(){
+  $('cabecera').textContent=`Pedido ${PEDIDO.fecha} · Entrega ${PEDIDO.entrega}`;
+  const cont=$('secciones'); cont.innerHTML='';
+  PEDIDO.secciones.forEach((sec,si)=>{
+    const card=document.createElement('div'); card.className='card';
+    let html=`<h2>${sec.nombre}</h2><table>
+      <tr><th>Producto</th><th>Stock</th><th>Pedido</th><th>Total</th></tr>`;
+    sec.items.forEach((it,ii)=>{
+      html+=`<tr>
+        <td>${it.n}</td><td>${it.stock}</td>
+        <td><div class="qty">
+          <button onclick="mod(${si},${ii},-1)">−</button>
+          <input id="q_${si}_${ii}" value="${it.sug}" inputmode="numeric" onchange="setQ(${si},${ii},this.value)">
+          <button onclick="mod(${si},${ii},1)">+</button>
+        </div></td>
+        <td id="t_${si}_${ii}">${it.stock+it.sug*(it.pack||1)}</td></tr>`;
+    });
+    html+=`<tr class="tot"><td>SUBTOTAL</td><td id="ss_${si}"></td><td id="sp_${si}"></td><td id="st_${si}"></td></tr></table>`;
+    card.innerHTML=html; cont.appendChild(card);
+  });
+  const gran=document.createElement('div'); gran.className='card';
+  gran.innerHTML=`<table><tr class="gran"><td>TOTAL GENERAL</td><td id="gs"></td><td id="gp"></td><td id="gt"></td></tr></table>`;
+  cont.appendChild(gran);
+  $('cardObs').style.display='block';
+  $('barra').style.display='flex';
+  calc();
+}
+function val(si,ii){ return parseFloat($('q_'+si+'_'+ii).value)||0 }
+function mod(si,ii,dir){
+  const it=PEDIDO.secciones[si].items[ii];
+  let v=val(si,ii)+dir*it.step;
+  if(v<0)v=0;
+  v=Math.round(v/it.step)*it.step;
+  $('q_'+si+'_'+ii).value=+v.toFixed(2); calc();
+}
+function setQ(si,ii,v){
+  const it=PEDIDO.secciones[si].items[ii];
+  v=Math.max(0, Math.round((parseFloat(v)||0)/it.step)*it.step);
+  $('q_'+si+'_'+ii).value=+v.toFixed(2); calc();
+}
+function calc(){
+  let GS=0,GP=0,GT=0;
+  PEDIDO.secciones.forEach((sec,si)=>{
+    let S=0,P=0,T=0;
+    sec.items.forEach((it,ii)=>{
+      const p=val(si,ii), ped=p*(it.pack||1), t=it.stock+ped;
+      $('t_'+si+'_'+ii).textContent=+t.toFixed(2);
+      S+=it.stock; P+=ped; T+=t;
+    });
+    $('ss_'+si).textContent=+S.toFixed(2); $('sp_'+si).textContent=+P.toFixed(2); $('st_'+si).textContent=+T.toFixed(2);
+    GS+=S; GP+=P; GT+=T;
+  });
+  $('gs').textContent=+GS.toFixed(2); $('gp').textContent=+GP.toFixed(2); $('gt').textContent=+GT.toFixed(2);
+  $('resumen').innerHTML=`Pedido: <b>${+GP.toFixed(2)}</b> un.<br>Stock+pedido: <b>${+GT.toFixed(2)}</b>`;
+}
+
+// ── Cargar en Datalive ──
+function armarPedido(){
+  const items={};
+  PEDIDO.secciones.forEach((sec,si)=>sec.items.forEach((it,ii)=>{
+    const p=val(si,ii); if(p>0) items[String(it.cod)]=p;
+  }));
+  return {entrega:PEDIDO.entrega, obs:$('obs').value.trim(), items};
+}
+
+async function cargar(modo){
+  if(ocupado) return;
+  const pedido=armarPedido();
+  const n=Object.keys(pedido.items).length;
+  if(!n) return alert('El pedido está vacío (todo en 0).');
+  if(modo==='prueba'){
+    if(!confirm(`PRUEBA: se carga el wizard en Datalive con ${n} productos y se cancela SIN confirmar. ¿Dale?`)) return;
+  }else{
+    const resp=prompt(`⚠️ Esto CONFIRMA el pedido en Datalive (${n} productos, entrega ${pedido.entrega}). ES IRREVERSIBLE.\n\nEscribí SI para autorizar:`);
+    if((resp||'').trim().toUpperCase()!=='SI') return;
+  }
+  ocupado=true;
+  try{
+    const antes=await fileMeta(RESULTADO);
+    estado('<span class="spinner"></span>Lanzando carga en la nube ('+modo+')...');
+    await dispatch(WF_CARGAR, {pedido:JSON.stringify(pedido), modo});
+    const m=await esperarCambio(RESULTADO, antes?antes.sha:null, 15, 'Cargando en Datalive ('+modo+')');
+    const res=JSON.parse(b64(m.content));
+    mostrarResultado(res);
+  }catch(e){ estado('❌ '+e.message,'error'); }
+  ocupado=false;
+}
+
+async function mostrarResultado(res){
+  const t=$('resultadoTexto');
+  $('cardResultado').style.display='block';
+  let msg='', cls='';
+  if(res.estado==='prueba_ok'){
+    msg='🧪 PRUEBA OK — el wizard se cargó y verificó bien. NO se confirmó nada.\n\n'; cls='ok';
+  }else if(res.estado==='confirmado'){
+    msg='✅ PEDIDO CONFIRMADO en Datalive. Nº: '+(res.pedidos_nuevos||[]).join(', ')+'\n\n'; cls='ok';
+  }else if(res.estado==='confirmado_por_humano'){
+    msg='✅ Confirmado. Nº: '+(res.pedidos_nuevos||[]).join(', ')+'\n\n'; cls='ok';
+  }else if(res.estado==='confirmado_sin_verificar'){
+    msg='⚠️ Se confirmó pero no pude verificar la fila nueva. REVISAR EN DATALIVE.\n\n'; cls='';
+  }else{
+    msg='❌ ERROR: '+(res.error||res.estado)+'\n\n'; cls='error';
+  }
+  const resumen=(res.resumen||'').split('Resumen segmentado por rubros')[1]||res.resumen||'';
+  t.className='estado '+cls;
+  t.textContent=msg+'Resumen por rubro:\n'+resumen.split('Observaciones:')[0].replace(/\n{2,}/g,'\n').trim();
+  estado(msg.split('\n')[0], cls);
+  try{
+    const s=await fileMeta(SHOT);
+    if(s && s.content){ $('shotResumen').src='data:image/png;base64,'+s.content.replace(/\n/g,''); $('shotResumen').style.display='block'; }
+  }catch(e){}
+  $('cardResultado').scrollIntoView({behavior:'smooth'});
+}
+
+// ── Init ──
+function init(){
+  if(!token()){ $('panelToken').style.display='block'; $('acciones').style.display='none'; return; }
+  $('panelToken').style.display='none'; $('acciones').style.display='block';
+  cargarPropuesta(false);
+}
+init();
+</script>
+</body>
+</html>
