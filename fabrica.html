@@ -67,11 +67,6 @@
 
 <div id="secciones"></div>
 
-<div class="card" id="cardObs" style="display:none">
-  <h2>Observaciones</h2>
-  <textarea id="obs" placeholder="Ej: reposición de tapas de empanadas"></textarea>
-</div>
-
 <div class="card" id="cardResultado" style="display:none">
   <h2>Resultado de la carga</h2>
   <div id="resultadoTexto" class="estado"></div>
@@ -79,9 +74,8 @@
 </div>
 
 <div class="barra" id="barra" style="display:none">
-  <div class="resumen" id="resumen"></div>
-  <button class="acc b-ambar" onclick="cargar('prueba')">🧪 Probar</button>
-  <button class="acc b-verde" onclick="cargar('confirmar')">✅ Autorizar</button>
+  <button class="acc b-ambar" style="flex:1" onclick="cargar('prueba')">🧪 Probar</button>
+  <button class="acc b-verde" style="flex:1" onclick="cargar('confirmar')">✅ Autorizar</button>
 </div>
 
 <script>
@@ -201,7 +195,6 @@ function render(){
   const gran=document.createElement('div'); gran.className='card';
   gran.innerHTML=`<table><tr class="gran"><td>TOTAL GENERAL</td><td id="gs"></td><td id="gp"></td><td id="gt"></td></tr></table>`;
   cont.appendChild(gran);
-  $('cardObs').style.display='block';
   $('barra').style.display='flex';
   calc();
 }
@@ -231,7 +224,6 @@ function calc(){
     GS+=S; GP+=P; GT+=T;
   });
   $('gs').textContent=+GS.toFixed(2); $('gp').textContent=+GP.toFixed(2); $('gt').textContent=+GT.toFixed(2);
-  $('resumen').innerHTML=`Pedido: <b>${+GP.toFixed(2)}</b> un.<br>Stock+pedido: <b>${+GT.toFixed(2)}</b>`;
 }
 
 // ── Cargar en Datalive ──
@@ -247,7 +239,7 @@ function armarPedido(){
   PEDIDO.secciones.forEach((sec,si)=>sec.items.forEach((it,ii)=>{
     const p=val(si,ii); if(p>0) items[String(it.cod)]=p;
   }));
-  return {entrega:fechaEntrega(), obs:$('obs').value.trim(), items};
+  return {entrega:fechaEntrega(), obs:'', items};
 }
 
 async function cargar(modo){
