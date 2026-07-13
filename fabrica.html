@@ -235,12 +235,19 @@ function calc(){
 }
 
 // ── Cargar en Datalive ──
+// La llegada es SIEMPRE el día siguiente al día en que se carga (lunes→martes,
+// jueves→viernes) — no la de la propuesta, que puede haberse generado otro día.
+function fechaEntrega(){
+  const d=new Date(); d.setDate(d.getDate()+1);
+  const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
+}
 function armarPedido(){
   const items={};
   PEDIDO.secciones.forEach((sec,si)=>sec.items.forEach((it,ii)=>{
     const p=val(si,ii); if(p>0) items[String(it.cod)]=p;
   }));
-  return {entrega:PEDIDO.entrega, obs:$('obs').value.trim(), items};
+  return {entrega:fechaEntrega(), obs:$('obs').value.trim(), items};
 }
 
 async function cargar(modo){
